@@ -318,7 +318,7 @@ def zuege_des_tages(rohdaten, namen):
             name = namen.get(eva, eva)
             if name not in bf_index:
                 bf_index[name] = len(bf_index)
-            h_liste.append([bf_index[name], v, aus])
+            h_liste.append([bf_index[name], v, aus, plan, gr])   # Bahnhof, Minuten, Ausfall, Planzeit, Gründe
         zuege.append({
             "name": z["name"], "nr": z["nr"], "von": z["von"], "nach": z["nach"],
             "ab": halte[0][1][0], "max": max_v, "wo": wo,

@@ -88,6 +88,18 @@ h2 { font-size: 1.05rem; margin: 26px 0 10px; }
 .wert.hoch { color: var(--late); background: var(--late-bg); }
 .wert.aus { color: var(--late); background: var(--late-bg); }
 .wert.unbekannt { color: var(--muted); font-weight: 400; }
+.liste li.zeile { cursor: pointer; }
+.liste li.zeile:hover { background: var(--bg); }
+.grund b { font-style: normal; font-weight: 700; color: var(--ink); }
+.detail { grid-column: 1 / -1; margin: 6px 0 2px; padding: 10px 12px; background: var(--bg); border-radius: 8px; font-size: .9rem; }
+.detail p { margin: 0 0 8px; }
+.detail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.detail li { display: grid; grid-template-columns: 3.2em 1fr auto; gap: 2px 10px; border: 0; padding: 0; }
+.detail .bf { overflow-wrap: anywhere; }
+.detail .bf small { display: block; color: var(--muted); font-style: italic; }
+.detail .m { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+.detail .m.ok { color: var(--ok); } .detail .m.mittel { color: var(--warn); } .detail .m.hoch, .detail .m.aus { color: var(--late); }
+.tipp { color: var(--muted); font-size: .85rem; margin: -4px 0 10px; }
 li.ausfall .zug { text-decoration: line-through; text-decoration-thickness: 2px; }
 .leer-hinweis { padding: 24px 16px; color: var(--muted); }
 button.mehr { font: inherit; margin: 12px 0 0; width: 100%; min-height: 44px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
@@ -129,8 +141,9 @@ footer { color: var(--muted); font-size: .8rem; margin: 28px 0 12px; }
   <section>
     <h2>Alle Züge</h2>
     <div class="filter">
-      <input id="suche" type="search" placeholder="Linie, Bahnhof oder Grund, z. B. Neuss oder Weiche" aria-label="Suchen">
+      <input id="suche" type="search" placeholder="Zugnummer, Linie, Bahnhof oder Grund, z. B. RE 1 oder Weiche" aria-label="Suchen">
       <select id="art" aria-label="Filter">
+        <option value="jetzt">Gerade eben (letzte Stunde)</option>
         <option value="spaet">Ab 6 Min. zu spät</option>
         <option value="15">Ab 15 Min. zu spät</option>
         <option value="30">Ab 30 Min. zu spät</option>
@@ -142,6 +155,7 @@ footer { color: var(--muted); font-size: .8rem; margin: 28px 0 12px; }
         <option value="zeit">Nach Uhrzeit</option>
       </select>
     </div>
+    <p class="tipp">Tippe auf einen Zug, um alle Halte mit Minuten und Begründung der DB zu sehen.</p>
     <p class="treffer" id="treffer"></p>
     <ul class="liste" id="liste"></ul>
     <button class="mehr" id="mehr" hidden>Weitere anzeigen</button>
@@ -248,10 +262,46 @@ footer { color: var(--muted); font-size: .8rem; margin: 28px 0 12px; }
     if (z.max <= D.grenze) return "<span class='wert ok'>+" + z.max + "</span>";
     return "<span class='wert " + (z.max >= 20 ? "hoch" : "mittel") + "'>+" + z.max + "</span>";
   }
+  // "Gerade eben": alle Züge mit einem Halt in der letzten Stunde der vorhandenen Daten
+  var spaetester = "00:00";
+  D.zuege.forEach(function (z) { z.h.forEach(function (h) { if (h[3] && h[3] > spaetester) spaetester = h[3]; }); });
+  var ab = (function () { var t = spaetester.split(":"), min = Math.max(0, (+t[0]) * 60 + (+t[1]) - 60);
+    return ("0" + Math.floor(min / 60)).slice(-2) + ":" + ("0" + (min % 60)).slice(-2); })();
+  if (D.tag !== D.heute) { var o = document.querySelector('#art option[value="jetzt"]'); if (o) o.remove(); }
+  else $("art").querySelector('option[value="jetzt"]').textContent = "Gerade eben (" + ab + "–" + spaetester + " Uhr)";
+
+  function minutenText(v, aus) {
+    if (aus) return ["fällt aus", "aus"];
+    if (v == null) return ["–", ""];
+    if (v <= 0) return ["+0", "ok"];
+    return ["+" + v, v <= D.grenze ? "ok" : v >= 20 ? "hoch" : "mittel"];
+  }
+  function detail(z) {
+    var gr = grundText(z);
+    var kopf = "<p>" + (gr ? "<b>Begründung der DB:</b> " + esc(gr) : "Die DB hat für diesen Zug keine Begründung angegeben.") + "</p>";
+    var halte = z.h.slice().sort(function (a, b) { return (a[3] || "") < (b[3] || "") ? -1 : 1; }).map(function (h) {
+      var m = minutenText(h[1], h[2]);
+      var g = (h[4] || []).map(function (c) { return D.gruende[c]; }).filter(Boolean).join(", ");
+      return "<li><span class='zeit'>" + esc(h[3] || "") + "</span><span class='bf'>" + esc(D.bf[h[0]]) +
+        (g ? "<small>" + esc(g) + "</small>" : "") + "</span><span class='m " + m[1] + "'>" + m[0] + "</span></li>";
+    }).join("");
+    return "<div class='detail'>" + kopf + "<ol>" + halte + "</ol></div>";
+  }
+  var offen = {};
+  D.zuege.forEach(function (z, i) { z._i = i; });
+  $("liste").addEventListener("click", function (e) {
+    var li = e.target.closest("li.zeile"); if (!li) return;
+    var k = li.getAttribute("data-k"); offen[k] = !offen[k]; zeichnen();
+  });
+  $("liste").addEventListener("keydown", function (e) {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches("li.zeile")) { e.preventDefault(); e.target.click(); }
+  });
+
   function zeichnen() {
     var q = $("suche").value.trim().toLowerCase(), art = $("art").value;
     var liste = D.zuege.filter(function (z) {
       var m = z.max || 0;
+      if (art === "jetzt" && !z.h.some(function (h) { return h[3] && h[3] >= ab; })) return false;
       if (art === "aus" && !z.ausfall) return false;
       if (art === "spaet" && !(z.ausfall || m > D.grenze)) return false;
       if ((art === "15" || art === "30") && !(m >= +art)) return false;
@@ -273,10 +323,12 @@ footer { color: var(--muted); font-size: .8rem; margin: 28px 0 12px; }
       } else {
         wo = z.wo && z.max > D.grenze ? "<br>gemessen in " + esc(z.wo) : "";
       }
-      return "<li class='" + (z.ausfall ? "ausfall" : "") + "'><span class='zeit'>" + esc(z.ab) + "</span>" +
+      var k = z._i;
+      return "<li class='zeile" + (z.ausfall ? " ausfall" : "") + "' data-k='" + esc(k) + "' tabindex='0' role='button' aria-expanded='" + !!offen[k] + "'><span class='zeit'>" + esc(z.ab) + "</span>" +
         "<div><div class='zug'>" + esc(z.name) + "<span class='nr'>" + esc(z.nr) + "</span></div>" +
         "<div class='route'>" + esc(z.von) + " – " + esc(z.nach) + wo + "</div>" +
-        (z.gr && z.gr.length ? "<div class='grund'>" + esc(grundText(z)) + "</div>" : "") + "</div>" + wert(z) + "</li>";
+        (z.gr && z.gr.length ? "<div class='grund'>" + esc(grundText(z)) + "</div>" : "") + "</div>" + wert(z) +
+        (offen[k] ? detail(z) : "") + "</li>";
     }).join("");
     $("mehr").hidden = liste.length <= gezeigt;
   }
