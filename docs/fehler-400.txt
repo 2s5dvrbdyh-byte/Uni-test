@@ -1,0 +1,8 @@
+Stationen, bei denen die DB mit HTTP 400 antwortet (3 Stück)
+Stand: 14.11.2026 18:56
+
+Name | EVA-Nummer | zuerst gesehen | zuletzt gesehen | Anzahl Fehler
+
+Duisburg-Bissingheim | 8001599 | 28.10.2026 11:08 | 14.11.2026 18:56 | 416
+Duisburg-Entenfang | 8005272 | 28.10.2026 11:08 | 13.11.2026 01:02 | 375
+Duisburg-Wedau | 8001612 | 28.10.2026 11:08 | 13.11.2026 01:02 | 375
